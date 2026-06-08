@@ -13,6 +13,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.zz.domain.model.ActivityLevel
+import com.example.zz.domain.model.DietPace
 import com.example.zz.domain.model.Gender
 
 @Composable
@@ -22,7 +23,7 @@ fun OnboardingScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var currentStep by remember { mutableIntStateOf(1) }
-    val totalSteps = 5
+    val totalSteps = 6
 
     Scaffold(
         bottomBar = {
@@ -75,6 +76,7 @@ fun OnboardingScreen(
                     3 -> PhysicalDataStep(uiState.height, uiState.currentWeight, viewModel::updateHeight, viewModel::updateCurrentWeight)
                     4 -> TargetWeightStep(uiState.targetWeight, viewModel::updateTargetWeight)
                     5 -> ActivityStep(uiState.activityLevel, viewModel::updateActivityLevel)
+                    6 -> DietPaceStep(uiState.dietPace, viewModel::updateDietPace)
                 }
             }
         }
@@ -204,6 +206,39 @@ fun ActivityStep(selectedLevel: ActivityLevel, onLevelChange: (ActivityLevel) ->
     }
 }
 
+@Composable
+fun DietPaceStep(selectedPace: DietPace, onPaceChange: (DietPace) -> Unit) {
+    Column {
+        Text("Tempo realizacji celu", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(16.dp))
+        DietPace.entries.forEach { pace ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectable(
+                        selected = (pace == selectedPace),
+                        onClick = { onPaceChange(pace) }
+                    )
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(selected = (pace == selectedPace), onClick = { onPaceChange(pace) })
+                Column {
+                    Text(text = pace.label, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = when(pace) {
+                            DietPace.CONSERVATIVE -> "Najzdrowsze podejście, łatwe do utrzymania"
+                            DietPace.MODERATE -> "Standardowe tempo, dobry balans"
+                            DietPace.AGGRESSIVE -> "Wymagające, dla osób zdeterminowanych"
+                        },
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
+    }
+}
+
 private fun isStepValid(step: Int, profile: com.example.zz.domain.model.UserProfile): Boolean {
     return when (step) {
         1 -> profile.name.isNotBlank()
@@ -211,6 +246,7 @@ private fun isStepValid(step: Int, profile: com.example.zz.domain.model.UserProf
         3 -> profile.height > 100 && profile.currentWeight > 30
         4 -> profile.targetWeight > 30
         5 -> true
+        6 -> true
         else -> false
     }
 }

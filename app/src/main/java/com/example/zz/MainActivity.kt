@@ -19,6 +19,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.zz.data.health.HealthConnectManager
 import com.example.zz.data.repository.UserRepositoryImpl
 import com.example.zz.ui.dashboard.DashboardScreen
 import com.example.zz.ui.dashboard.DashboardViewModel
@@ -40,18 +41,19 @@ class MainActivity : ComponentActivity() {
         }
 
         val userRepository = UserRepositoryImpl(applicationContext)
+        val healthConnectManager = HealthConnectManager(applicationContext)
         
         enableEdgeToEdge()
         setContent {
             ZzTheme {
-                FitnessApp(userRepository)
+                FitnessApp(userRepository, healthConnectManager)
             }
         }
     }
 }
 
 @Composable
-fun FitnessApp(userRepository: UserRepositoryImpl) {
+fun FitnessApp(userRepository: UserRepositoryImpl, healthConnectManager: HealthConnectManager) {
     val navController = rememberNavController()
     
     val userProfile by userRepository.getUserProfile().collectAsStateWithLifecycle(initialValue = null)
@@ -123,7 +125,7 @@ fun FitnessApp(userRepository: UserRepositoryImpl) {
                 factory = object : ViewModelProvider.Factory {
                     override fun <T : ViewModel> create(modelClass: Class<T>): T {
                         @Suppress("UNCHECKED_CAST")
-                        return DashboardViewModel(userRepository) as T
+                        return DashboardViewModel(userRepository, healthConnectManager) as T
                     }
                 }
             )

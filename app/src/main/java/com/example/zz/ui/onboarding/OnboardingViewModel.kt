@@ -57,6 +57,10 @@ class OnboardingViewModel(
         _uiState.update { it.copy(activityLevel = level) }
     }
 
+    fun updateDietPace(pace: com.example.zz.domain.model.DietPace) {
+        _uiState.update { it.copy(dietPace = pace) }
+    }
+
     fun completeOnboarding(onSuccess: () -> Unit) {
         viewModelScope.launch {
             // Obliczamy parametry końcowe przed zapisem

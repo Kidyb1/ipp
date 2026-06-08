@@ -6,16 +6,52 @@ import com.example.zz.domain.model.WeightEntry
 import com.example.zz.domain.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class DashboardViewModel(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val healthConnectManager: com.example.zz.data.health.HealthConnectManager? = null
 ) : ViewModel() {
 
     private val _currentTipIndex = MutableStateFlow(0)
+    private val _syncedCalories = MutableStateFlow(0.0)
+    val syncedCalories = _syncedCalories.asStateFlow()
+
+    private val _hasHealthPermissions = MutableStateFlow(false)
+    val hasHealthPermissions = _hasHealthPermissions.asStateFlow()
+
+    val healthPermissions = healthConnectManager?.permissions ?: emptySet()
+
+    private val calculateMetabolismUseCase = com.example.zz.domain.usecase.CalculateMetabolismUseCase()
     
+    init {
+        refreshHealthData()
+    }
+
+    fun refreshHealthData() {
+        viewModelScope.launch {
+            healthConnectManager?.let { manager ->
+                val hasPerms = manager.hasAllPermissions()
+                _hasHealthPermissions.value = hasPerms
+                if (hasPerms) {
+                    val calories = manager.readDailyCalories(java.time.ZonedDateTime.now())
+                    _syncedCalories.value = calories
+                    
+                    // Opcjonalnie zaktualizuj wagę jeśli jest nowsza
+                    manager.readLatestWeight()?.let { latestWeight ->
+                        val profile = userProfile.value
+                        if (profile != null && latestWeight != profile.currentWeight) {
+                            addWeightEntry(latestWeight)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     val userProfile = userRepository.getUserProfile().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -60,18 +96,35 @@ class DashboardViewModel(
         }
     }
 
-    fun addWeightEntry(weight: Double) {
+    fun updateGoalSettings(targetWeight: Double, dietPace: com.example.zz.domain.model.DietPace) {
         viewModelScope.launch {
             val currentProfile = userProfile.value ?: return@launch
-            val newEntry = WeightEntry(date = System.currentTimeMillis(), weight = weight)
-            val updatedHistory = currentProfile.weightHistory + newEntry
-            
-            userRepository.saveUserProfile(
+            val updatedProfile = calculateMetabolismUseCase(
                 currentProfile.copy(
-                    currentWeight = weight,
+                    targetWeight = targetWeight,
+                    dietPace = dietPace
+                )
+            )
+            userRepository.saveUserProfile(updatedProfile)
+        }
+    }
+
+    fun addWeightEntry(weight: Double, date: Long = System.currentTimeMillis()) {
+        viewModelScope.launch {
+            val currentProfile = userProfile.value ?: return@launch
+            val newEntry = WeightEntry(date = date, weight = weight)
+            // Sort history by date after adding new entry
+            val updatedHistory = (currentProfile.weightHistory + newEntry).sortedBy { it.date }
+            
+            val latestWeight = updatedHistory.lastOrNull()?.weight ?: weight
+
+            val updatedProfile = calculateMetabolismUseCase(
+                currentProfile.copy(
+                    currentWeight = latestWeight,
                     weightHistory = updatedHistory
                 )
             )
+            userRepository.saveUserProfile(updatedProfile)
         }
     }
 }

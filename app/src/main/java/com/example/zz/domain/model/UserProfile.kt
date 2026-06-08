@@ -28,6 +28,13 @@ data class WeightEntry(
 )
 
 @Serializable
+enum class DietPace(val label: String, val weeklyChangeKg: Double) {
+    CONSERVATIVE("Zachowawcze (0.25kg/tydz)", 0.25),
+    MODERATE("Zrównoważone (0.5kg/tydz)", 0.5),
+    AGGRESSIVE("Agresywne (0.8kg/tydz)", 0.8)
+}
+
+@Serializable
 data class UserProfile(
     val name: String = "",
     val age: Int = 0,
@@ -36,6 +43,7 @@ data class UserProfile(
     val targetWeight: Double = 0.0,
     val gender: Gender = Gender.MALE,
     val activityLevel: ActivityLevel = ActivityLevel.MODERATE,
+    val dietPace: DietPace = DietPace.MODERATE,
     val targetCalories: Int = 0,
     val proteinGrams: Int = 0,
     val fatGrams: Int = 0,

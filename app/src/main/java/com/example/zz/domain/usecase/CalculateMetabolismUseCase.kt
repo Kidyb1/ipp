@@ -30,10 +30,12 @@ class CalculateMetabolismUseCase {
             else -> UserGoal.UTRZYMANIE
         }
 
-        // 4. Korekta kalorii pod cel
+        // 4. Korekta kalorii pod cel z uwzględnieniem tempa
+        val dailyAdjustment = (profile.dietPace.weeklyChangeKg * 7700 / 7).roundToInt()
+        
         val targetCalories = when (goal) {
-            UserGoal.REDUKCJA -> tdee - 400 // Standardowy deficyt
-            UserGoal.MASA -> tdee + 300     // Standardowa nadwyżka
+            UserGoal.REDUKCJA -> tdee - dailyAdjustment
+            UserGoal.MASA -> tdee + (dailyAdjustment * 0.5).roundToInt() // Masa zwykle wolniej niż redukcja tłuszczu
             UserGoal.UTRZYMANIE -> tdee
         }
 

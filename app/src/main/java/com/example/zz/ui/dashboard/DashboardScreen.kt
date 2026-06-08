@@ -1,5 +1,6 @@
 package com.example.zz.ui.dashboard
 
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.health.connect.client.PermissionController
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Refresh
@@ -41,14 +43,23 @@ fun DashboardScreen(
     onLogout: () -> Unit = {}
 ) {
     val userProfile by viewModel.userProfile.collectAsState()
+    val syncedCalories by viewModel.syncedCalories.collectAsState(initial = 0.0)
+    val hasHealthPermissions by viewModel.hasHealthPermissions.collectAsState()
     val currentTip by viewModel.currentTip.collectAsState()
     var showWeightDialog by remember { mutableStateOf(false) }
+    var showEditGoalDialog by remember { mutableStateOf(false) }
+
+    val permissionsLauncher = rememberLauncherForActivityResult(
+        PermissionController.createRequestPermissionResultContract()
+    ) { granted ->
+        viewModel.refreshHealthData()
+    }
 
     userProfile?.let { profile ->
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Fitness App") },
+                    title = { Text("Shaper") },
                     actions = {
                         IconButton(onClick = onLogout) {
                             Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Wyloguj")
@@ -87,7 +98,15 @@ fun DashboardScreen(
                 }
 
                 item {
-                    SummaryCard(profile)
+                    SummaryCard(
+                        profile = profile,
+                        syncedCalories = syncedCalories,
+                        hasHealthPermissions = hasHealthPermissions,
+                        onSyncClick = {
+                            permissionsLauncher.launch(viewModel.healthPermissions)
+                        },
+                        onEditClick = { showEditGoalDialog = true }
+                    )
                 }
 
                 item {
@@ -127,18 +146,43 @@ fun DashboardScreen(
     if (showWeightDialog) {
         AddWeightDialog(
             onDismiss = { showWeightDialog = false },
-            onConfirm = { weight ->
-                viewModel.addWeightEntry(weight)
+            onConfirm = { weight, date ->
+                viewModel.addWeightEntry(weight, date)
                 showWeightDialog = false
             }
         )
     }
+
+    if (showEditGoalDialog) {
+        userProfile?.let { profile ->
+            EditGoalDialog(
+                profile = profile,
+                onDismiss = { showEditGoalDialog = false },
+                onConfirm = { targetWeight, pace ->
+                    viewModel.updateGoalSettings(targetWeight, pace)
+                    showEditGoalDialog = false
+                }
+            )
+        }
+    }
 }
 
 @Composable
-fun SummaryCard(profile: UserProfile) {
+fun SummaryCard(
+    profile: UserProfile,
+    syncedCalories: Double,
+    hasHealthPermissions: Boolean,
+    onSyncClick: () -> Unit,
+    onEditClick: () -> Unit
+) {
+    val progress = if (profile.targetCalories > 0) {
+        (syncedCalories / profile.targetCalories).toFloat().coerceIn(0f, 1f)
+    } else 0f
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onEditClick() },
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     ) {
@@ -149,7 +193,7 @@ fun SummaryCard(profile: UserProfile) {
         ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.size(100.dp)) {
                 CircularProgressIndicator(
-                    progress = { 0.7f },
+                    progress = { progress },
                     modifier = Modifier.fillMaxSize(),
                     strokeWidth = 10.dp,
                     strokeCap = StrokeCap.Round,
@@ -157,30 +201,65 @@ fun SummaryCard(profile: UserProfile) {
                 )
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        "${profile.targetCalories}",
+                        "${syncedCalories.toInt()}",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
+                    Text("z ${profile.targetCalories}", style = MaterialTheme.typography.labelSmall)
                     Text("kcal", style = MaterialTheme.typography.labelSmall)
                 }
             }
             
             Column {
                 Text(
-                    "Twój cel: ${profile.goal}",
+                    "Cel: ${profile.goal}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
-                Text(
-                    "Waga docelowa: ${profile.targetWeight} kg",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                
+                val weightDiff = kotlin.math.abs(profile.currentWeight - profile.targetWeight)
+                val weeksLeft = weightDiff / profile.dietPace.weeklyChangeKg
+                val daysLeft = (weeksLeft * 7).toInt()
+                
+                if (daysLeft > 0 && profile.goal != com.example.zz.domain.model.UserGoal.UTRZYMANIE) {
+                    Text(
+                        "Koniec za ok. $daysLeft dni",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    "Pozostało: ${(profile.targetCalories * 0.3).toInt()} kcal",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                )
+                
+                if (!hasHealthPermissions) {
+                    Button(
+                        onClick = onSyncClick,
+                        modifier = Modifier.height(32.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Text("Połącz z Health", fontSize = 10.sp)
+                    }
+                } else {
+                    val remaining = (profile.targetCalories - syncedCalories).coerceAtLeast(0.0).toInt()
+                    Text(
+                        "Pozostało: $remaining kcal",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    )
+                    
+                    if (syncedCalories > 0) {
+                        Text(
+                            "Zsynchronizowano z Health Connect",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontSize = 8.sp
+                        )
+                    }
+                }
             }
         }
     }
@@ -508,22 +587,130 @@ fun WeightEntryRow(entry: WeightEntry) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddWeightDialog(onDismiss: () -> Unit, onConfirm: (Double) -> Unit) {
+fun EditGoalDialog(
+    profile: UserProfile,
+    onDismiss: () -> Unit,
+    onConfirm: (Double, com.example.zz.domain.model.DietPace) -> Unit
+) {
+    var targetWeightText by remember { mutableStateOf(profile.targetWeight.toString()) }
+    var selectedPace by remember { mutableStateOf(profile.dietPace) }
+    var expanded by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edytuj cel") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedTextField(
+                    value = targetWeightText,
+                    onValueChange = { targetWeightText = it },
+                    label = { Text("Waga docelowa (kg)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal
+                    )
+                )
+
+                ExposedDropdownMenuBox(
+                    expanded = expanded,
+                    onExpandedChange = { expanded = !expanded }
+                ) {
+                    OutlinedTextField(
+                        value = selectedPace.label,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Tempo") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        com.example.zz.domain.model.DietPace.entries.forEach { pace ->
+                            DropdownMenuItem(
+                                text = { Text(pace.label) },
+                                onClick = {
+                                    selectedPace = pace
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                targetWeightText.toDoubleOrNull()?.let {
+                    onConfirm(it, selectedPace)
+                }
+            }) {
+                Text("Zapisz")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Anuluj") }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AddWeightDialog(onDismiss: () -> Unit, onConfirm: (Double, Long) -> Unit) {
     var weightText by remember { mutableStateOf("") }
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = System.currentTimeMillis()
+    )
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("OK")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    val selectedDate = datePickerState.selectedDateMillis ?: System.currentTimeMillis()
+    val dateStr = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(selectedDate))
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Dodaj pomiar wagi") },
         text = {
-            OutlinedTextField(
-                value = weightText,
-                onValueChange = { weightText = it },
-                label = { Text("Waga (kg)") },
-                modifier = Modifier.fillMaxWidth()
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedTextField(
+                    value = weightText,
+                    onValueChange = { weightText = it },
+                    label = { Text("Waga (kg)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal
+                    )
+                )
+                
+                OutlinedButton(
+                    onClick = { showDatePicker = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Data: $dateStr")
+                }
+            }
         },
         confirmButton = {
-            Button(onClick = { weightText.toDoubleOrNull()?.let { onConfirm(it) } }) {
+            Button(onClick = { 
+                weightText.toDoubleOrNull()?.let { 
+                    onConfirm(it, selectedDate) 
+                } 
+            }) {
                 Text("Dodaj")
             }
         },
