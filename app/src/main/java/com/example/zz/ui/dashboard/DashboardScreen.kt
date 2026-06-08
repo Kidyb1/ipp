@@ -491,18 +491,77 @@ fun WeightChart(profile: UserProfile) {
             return height - padding - ratio * (height - 2 * padding)
         }
 
-        // 1. Linia celu
-        val targetPath = Path().apply {
+        // 0. Pozioma linia celu (Target Weight)
+        val targetY = getY(profile.targetWeight)
+        drawLine(
+            color = secondaryColor.copy(alpha = 0.2f),
+            start = Offset(padding, targetY),
+            end = Offset(width - padding, targetY),
+            strokeWidth = 2f
+        )
+        
+        // Zaznaczenie punktu celu na końcu wykresu
+        drawCircle(
+            color = secondaryColor.copy(alpha = 0.6f),
+            radius = 10f,
+            center = Offset(width - padding, targetY)
+        )
+
+        // 1. Linia planu (od pierwszego pomiaru do celu na końcu 12 tyg)
+        val planPath = Path().apply {
             moveTo(getX(startTime), getY(history.first().weight))
             lineTo(getX(endTime), getY(profile.targetWeight))
         }
         drawPath(
-            path = targetPath,
-            color = secondaryColor.copy(alpha = 0.3f),
-            style = Stroke(width = 4f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f)))
+            path = planPath,
+            color = secondaryColor.copy(alpha = 0.1f),
+            style = Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f)))
         )
 
-        // 2. Linia historii
+        // 3. Trend i Przewidywanie (Regresja liniowa z wszystkich pomiarów)
+        if (history.size >= 2) {
+            val n = history.size
+            val sumX = history.sumOf { it.date.toDouble() }
+            val sumY = history.sumOf { it.weight }
+            val sumXY = history.sumOf { it.date.toDouble() * it.weight }
+            val sumX2 = history.sumOf { it.date.toDouble() * it.date.toDouble() }
+            
+            val denominator = (n * sumX2 - sumX * sumX)
+            if (denominator != 0.0) {
+                val slope = (n * sumXY - sumX * sumY) / denominator
+                val intercept = (sumY - slope * sumX) / n
+
+                // Średnia linia trendu (przez całą historię)
+                val trendPath = Path().apply {
+                    val startTrendY = getY(slope * startTime + intercept)
+                    val currentTrendY = getY(slope * history.last().date + intercept)
+                    moveTo(getX(startTime), startTrendY)
+                    lineTo(getX(history.last().date), currentTrendY)
+                }
+                drawPath(
+                    path = trendPath,
+                    color = tertiaryColor.copy(alpha = 0.3f),
+                    style = Stroke(width = 4f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(20f, 10f)))
+                )
+
+                // Przewidywanie przyszłości (od ostatniego punktu wg średniego tempa)
+                val last = history.last()
+                val predictionEndTime = endTime
+                val predictedWeight = last.weight + slope * (predictionEndTime - last.date)
+                
+                val predictionPath = Path().apply {
+                    moveTo(getX(last.date), getY(last.weight))
+                    lineTo(getX(predictionEndTime), getY(predictedWeight))
+                }
+                drawPath(
+                    path = predictionPath,
+                    color = tertiaryColor,
+                    style = Stroke(width = 6f, cap = StrokeCap.Round)
+                )
+            }
+        }
+
+        // 2. Linia faktycznej historii wagi (na wierzchu trendu)
         val historyPath = Path().apply {
             history.forEachIndexed { index, entry ->
                 val x = getX(entry.date)
@@ -513,39 +572,20 @@ fun WeightChart(profile: UserProfile) {
         drawPath(
             path = historyPath,
             color = primaryColor,
-            style = Stroke(width = 6f, cap = StrokeCap.Round)
+            style = Stroke(width = 8f, cap = StrokeCap.Round)
         )
 
         history.forEach { entry ->
             drawCircle(
-                color = primaryColor,
-                radius = 8f,
+                color = Color.White,
+                radius = 10f,
                 center = Offset(getX(entry.date), getY(entry.weight))
             )
-        }
-
-        // 3. Przewidywanie
-        if (history.size >= 2) {
-            val last = history.last()
-            val prev = history[history.size - 2]
-            val timeDiff = last.date - prev.date
-            if (timeDiff > 0) {
-                val weightDiff = last.weight - prev.weight
-                val ratePerMs = weightDiff / timeDiff
-                
-                val predictionEndTime = endTime
-                val predictedWeight = last.weight + ratePerMs * (predictionEndTime - last.date)
-                
-                val predictionPath = Path().apply {
-                    moveTo(getX(last.date), getY(last.weight))
-                    lineTo(getX(predictionEndTime), getY(predictedWeight))
-                }
-                drawPath(
-                    path = predictionPath,
-                    color = tertiaryColor,
-                    style = Stroke(width = 4f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(15f, 15f)))
-                )
-            }
+            drawCircle(
+                color = primaryColor,
+                radius = 6f,
+                center = Offset(getX(entry.date), getY(entry.weight))
+            )
         }
     }
 }
