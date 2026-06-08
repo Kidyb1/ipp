@@ -20,13 +20,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.zz.data.repository.UserRepositoryImpl
-import com.example.zz.domain.model.UserProfile
 import com.example.zz.ui.dashboard.DashboardScreen
 import com.example.zz.ui.dashboard.DashboardViewModel
 import com.example.zz.ui.onboarding.OnboardingScreen
 import com.example.zz.ui.onboarding.OnboardingViewModel
 import com.example.zz.ui.theme.ZzTheme
-
 import com.example.zz.ui.auth.AuthScreen
 import com.example.zz.ui.auth.AuthViewModel
 
@@ -34,6 +32,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        // Inicjalizacja Firebase (na wypadek gdyby auto-init zawiódł)
+        try {
+            com.google.firebase.FirebaseApp.initializeApp(this)
+        } catch (e: Exception) {
+            // Firebase jest już zainicjalizowany lub wystąpił błąd pliku json
+        }
+
         val userRepository = UserRepositoryImpl(applicationContext)
         
         enableEdgeToEdge()
@@ -50,16 +55,21 @@ fun FitnessApp(userRepository: UserRepositoryImpl) {
     val navController = rememberNavController()
     
     val userProfile by userRepository.getUserProfile().collectAsStateWithLifecycle(initialValue = null)
-    
-    // Sprawdzamy stan zalogowania
-    val isLoggedIn = userRepository.isUserLoggedIn()
-    val startDestination = if (!isLoggedIn) "auth" else {
-        if (userProfile == null) "loading"
-        else if (userProfile!!.age == 0) "onboarding" 
-        else "dashboard"
+    val isLoggedIn by userRepository.getAuthStateFlow().collectAsStateWithLifecycle(initialValue = userRepository.isUserLoggedIn())
+
+    // Automatyczny powrót do logowania przy wylogowaniu
+    LaunchedEffect(isLoggedIn) {
+        if (!isLoggedIn) {
+            navController.navigate("auth") {
+                popUpTo(0) { inclusive = true }
+            }
+        }
     }
 
-    NavHost(navController = navController, startDestination = if (!isLoggedIn) "auth" else "loading") {
+    NavHost(
+        navController = navController, 
+        startDestination = if (!isLoggedIn) "auth" else "loading"
+    ) {
         composable("auth") {
             val authViewModel: AuthViewModel = viewModel()
             AuthScreen(
@@ -73,7 +83,10 @@ fun FitnessApp(userRepository: UserRepositoryImpl) {
         }
 
         composable("loading") {
-            Box(modifier = androidx.compose.ui.Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            Box(
+                modifier = Modifier.fillMaxSize(), 
+                contentAlignment = Alignment.Center
+            ) {
                 CircularProgressIndicator()
             }
             LaunchedEffect(userProfile) {
@@ -118,9 +131,6 @@ fun FitnessApp(userRepository: UserRepositoryImpl) {
                 viewModel = dashboardViewModel,
                 onLogout = {
                     userRepository.logout()
-                    navController.navigate("auth") {
-                        popUpTo("dashboard") { inclusive = true }
-                    }
                 }
             )
         }

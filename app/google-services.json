@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "493695329632",
+    "project_id": "shaper-78443",
+    "storage_bucket": "shaper-78443.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:493695329632:android:a70c882c78bf435ab52a05",
+        "android_client_info": {
+          "package_name": "com.shaper"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDlD3AQlossgDOQ3F2patTD-Qao0eUa6Zk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

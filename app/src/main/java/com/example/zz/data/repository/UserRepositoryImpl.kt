@@ -1,15 +1,11 @@
 package com.example.zz.data.repository
 
 import android.content.Context
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import com.example.zz.domain.model.UserProfile
 import com.example.zz.domain.repository.UserRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -20,7 +16,6 @@ class UserRepositoryImpl(private val context: Context) : UserRepository {
 
     private val auth: FirebaseAuth? by lazy {
         try {
-            com.google.firebase.FirebaseApp.getInstance()
             FirebaseAuth.getInstance()
         } catch (e: Exception) {
             null
@@ -29,7 +24,6 @@ class UserRepositoryImpl(private val context: Context) : UserRepository {
 
     private val firestore: FirebaseFirestore? by lazy {
         try {
-            com.google.firebase.FirebaseApp.getInstance()
             FirebaseFirestore.getInstance()
         } catch (e: Exception) {
             null
@@ -39,31 +33,31 @@ class UserRepositoryImpl(private val context: Context) : UserRepository {
     private val userCollection by lazy { firestore?.collection("users") }
 
     override fun getUserProfile(): Flow<UserProfile> = callbackFlow {
-        val uid = auth?.currentUser?.uid
+        val currentAuth = auth
         val currentCollection = userCollection
+        val uid = currentAuth?.currentUser?.uid
         
-        var listenerRegistration: com.google.firebase.firestore.ListenerRegistration? = null
-
         if (uid != null && currentCollection != null) {
-            listenerRegistration = currentCollection.document(uid).addSnapshotListener { snapshot, error ->
-                if (error != null) return@addSnapshotListener
+            val listenerRegistration = currentCollection.document(uid).addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(UserProfile())
+                    return@addSnapshotListener
+                }
                 
                 val profile = snapshot?.toObject(UserProfile::class.java) ?: UserProfile()
                 trySend(profile)
             }
+            awaitClose { listenerRegistration.remove() }
         } else {
             trySend(UserProfile())
-        }
-        
-        awaitClose { 
-            listenerRegistration?.remove() 
+            awaitClose { /* Nic do usunięcia */ }
         }
     }
 
     override suspend fun saveUserProfile(profile: UserProfile) {
         val uid = auth?.currentUser?.uid
         if (uid != null && userCollection != null) {
-            userCollection?.document(uid)?.set(profile)?.await()
+            userCollection!!.document(uid).set(profile).await()
         }
     }
 
@@ -71,6 +65,24 @@ class UserRepositoryImpl(private val context: Context) : UserRepository {
         return getUserProfile().map { it.age > 0 }
     }
     
+    fun getAuthStateFlow(): Flow<Boolean> = callbackFlow {
+        val currentAuth = auth
+        val listener = if (currentAuth != null) {
+            val l = FirebaseAuth.AuthStateListener { a ->
+                trySend(a.currentUser != null)
+            }
+            currentAuth.addAuthStateListener(l)
+            l
+        } else {
+            trySend(false)
+            null
+        }
+        
+        awaitClose { 
+            listener?.let { currentAuth?.removeAuthStateListener(it) }
+        }
+    }
+
     fun isUserLoggedIn(): Boolean {
         return auth?.currentUser != null
     }
