@@ -75,7 +75,7 @@ fun FitnessApp(userRepository: UserRepositoryImpl) {
             AuthScreen(
                 viewModel = authViewModel,
                 onAuthSuccess = {
-                    navController.navigate("onboarding") {
+                    navController.navigate("loading") {
                         popUpTo("auth") { inclusive = true }
                     }
                 }

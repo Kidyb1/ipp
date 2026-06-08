@@ -41,5 +41,6 @@ data class UserProfile(
     val fatGrams: Int = 0,
     val carbGrams: Int = 0,
     val goal: UserGoal = UserGoal.UTRZYMANIE,
-    val weightHistory: List<WeightEntry> = emptyList()
+    val weightHistory: List<WeightEntry> = emptyList(),
+    val createdAt: Long = 0L // Timestamp utworzenia profilu
 )

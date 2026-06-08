@@ -40,6 +40,7 @@ class UserRepositoryImpl(private val context: Context) : UserRepository {
         if (uid != null && currentCollection != null) {
             val listenerRegistration = currentCollection.document(uid).addSnapshotListener { snapshot, error ->
                 if (error != null) {
+                    android.util.Log.e("UserRepository", "Błąd Firestore (getUserProfile): ${error.message}", error)
                     trySend(UserProfile())
                     return@addSnapshotListener
                 }
@@ -57,7 +58,13 @@ class UserRepositoryImpl(private val context: Context) : UserRepository {
     override suspend fun saveUserProfile(profile: UserProfile) {
         val uid = auth?.currentUser?.uid
         if (uid != null && userCollection != null) {
-            userCollection!!.document(uid).set(profile).await()
+            try {
+                userCollection!!.document(uid).set(profile).await()
+                android.util.Log.d("UserRepository", "Profil zapisany pomyślnie dla UID: $uid")
+            } catch (e: Exception) {
+                android.util.Log.e("UserRepository", "Błąd zapisu profilu: ${e.message}", e)
+                throw e
+            }
         }
     }
 

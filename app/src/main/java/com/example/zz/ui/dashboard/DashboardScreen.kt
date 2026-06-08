@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,6 +41,7 @@ fun DashboardScreen(
     onLogout: () -> Unit = {}
 ) {
     val userProfile by viewModel.userProfile.collectAsState()
+    val currentTip by viewModel.currentTip.collectAsState()
     var showWeightDialog by remember { mutableStateOf(false) }
 
     userProfile?.let { profile ->
@@ -86,6 +88,14 @@ fun DashboardScreen(
 
                 item {
                     SummaryCard(profile)
+                }
+
+                item {
+                    CoachTipCard(
+                        profile = profile,
+                        tip = currentTip,
+                        onRefresh = { viewModel.refreshTip() }
+                    )
                 }
 
                 item {
@@ -170,6 +180,75 @@ fun SummaryCard(profile: UserProfile) {
                     "Pozostało: ${(profile.targetCalories * 0.3).toInt()} kcal",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun CoachTipCard(
+    profile: UserProfile,
+    tip: String,
+    onRefresh: () -> Unit
+) {
+    val daysOnGoal = if (profile.createdAt > 0) {
+        ((System.currentTimeMillis() - profile.createdAt) / (1000 * 60 * 60 * 24)).toInt()
+    } else 0
+
+    val displayTip = if (tip.isEmpty()) {
+        when {
+            profile.goal == com.example.zz.domain.model.UserGoal.REDUKCJA && daysOnGoal < 7 ->
+                "Pierwsze dni redukcji! Pamiętaj o picu dużej ilości wody i wyspaniu się. Organizm musi się przyzwyczaić."
+            profile.goal == com.example.zz.domain.model.UserGoal.REDUKCJA && daysOnGoal >= 14 ->
+                "Dwa tygodnie za Tobą! Jeśli czujesz duże zmęczenie, rozważ lekki 'refeed' - dorzuć 200kcal z węglowodanów."
+            profile.goal == com.example.zz.domain.model.UserGoal.MASA ->
+                "Budujemy masę! Skup się na progresji ciężarowej na treningu. Kalorie to paliwo."
+            else -> "Dobra robota! Trzymaj się wyznaczonych makroskładników, a efekty same przyjdą."
+        }
+    } else tip
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("💡", fontSize = 24.sp)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        "Podpowiedź trenera",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+                IconButton(onClick = onRefresh) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = "Odśwież poradę",
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                displayTip,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            if (profile.createdAt > 0) {
+                Text(
+                    "Dzień ${daysOnGoal + 1} Twojego celu",
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(top = 8.dp),
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.6f)
                 )
             }
         }

@@ -60,7 +60,9 @@ class OnboardingViewModel(
     fun completeOnboarding(onSuccess: () -> Unit) {
         viewModelScope.launch {
             // Obliczamy parametry końcowe przed zapisem
-            val calculatedProfile = calculateMetabolismUseCase(_uiState.value)
+            val calculatedProfile = calculateMetabolismUseCase(_uiState.value).copy(
+                createdAt = System.currentTimeMillis()
+            )
             userRepository.saveUserProfile(calculatedProfile)
             onSuccess()
         }
