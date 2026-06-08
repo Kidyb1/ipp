@@ -20,6 +20,9 @@ class DashboardViewModel(
     private val _syncedCalories = MutableStateFlow(0.0)
     val syncedCalories = _syncedCalories.asStateFlow()
 
+    private val _syncedNutrition = MutableStateFlow(com.example.zz.data.health.DailyNutrition())
+    val syncedNutrition = _syncedNutrition.asStateFlow()
+
     private val _hasHealthPermissions = MutableStateFlow(false)
     val hasHealthPermissions = _hasHealthPermissions.asStateFlow()
 
@@ -37,8 +40,9 @@ class DashboardViewModel(
                 val hasPerms = manager.hasAllPermissions()
                 _hasHealthPermissions.value = hasPerms
                 if (hasPerms) {
-                    val calories = manager.readDailyCalories(java.time.ZonedDateTime.now())
-                    _syncedCalories.value = calories
+                    val nutrition = manager.readDailyNutrition(java.time.ZonedDateTime.now())
+                    _syncedNutrition.value = nutrition
+                    _syncedCalories.value = nutrition.calories
                     
                     // Opcjonalnie zaktualizuj wagę jeśli jest nowsza
                     manager.readLatestWeight()?.let { latestWeight ->

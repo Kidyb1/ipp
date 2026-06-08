@@ -10,6 +10,13 @@ import androidx.health.connect.client.time.TimeRangeFilter
 import java.time.Instant
 import java.time.ZonedDateTime
 
+data class DailyNutrition(
+    val calories: Double = 0.0,
+    val protein: Double = 0.0,
+    val fat: Double = 0.0,
+    val carbs: Double = 0.0
+)
+
 class HealthConnectManager(private val context: Context) {
 
     private val healthConnectClient by lazy {
@@ -27,8 +34,8 @@ class HealthConnectManager(private val context: Context) {
         return healthConnectClient?.permissionController?.getGrantedPermissions()?.containsAll(permissions) == true
     }
 
-    suspend fun readDailyCalories(date: ZonedDateTime): Double {
-        val client = healthConnectClient ?: return 0.0
+    suspend fun readDailyNutrition(date: ZonedDateTime): DailyNutrition {
+        val client = healthConnectClient ?: return DailyNutrition()
         
         val startOfDay = date.toLocalDate().atStartOfDay(date.zone).toInstant()
         val endOfDay = date.toLocalDate().atTime(23, 59, 59).atZone(date.zone).toInstant()
@@ -40,7 +47,28 @@ class HealthConnectManager(private val context: Context) {
             )
         )
         
-        return response.records.sumOf { it.energy?.inKilocalories ?: 0.0 }
+        var totalCalories = 0.0
+        var totalProtein = 0.0
+        var totalFat = 0.0
+        var totalCarbs = 0.0
+
+        response.records.forEach { record ->
+            totalCalories += record.energy?.inKilocalories ?: 0.0
+            totalProtein += record.protein?.inGrams ?: 0.0
+            totalFat += record.totalFat?.inGrams ?: 0.0
+            totalCarbs += record.totalCarbohydrate?.inGrams ?: 0.0
+        }
+
+        return DailyNutrition(
+            calories = totalCalories,
+            protein = totalProtein,
+            fat = totalFat,
+            carbs = totalCarbs
+        )
+    }
+
+    suspend fun readDailyCalories(date: ZonedDateTime): Double {
+        return readDailyNutrition(date).calories
     }
 
     suspend fun readLatestWeight(): Double? {

@@ -44,6 +44,7 @@ fun DashboardScreen(
 ) {
     val userProfile by viewModel.userProfile.collectAsState()
     val syncedCalories by viewModel.syncedCalories.collectAsState(initial = 0.0)
+    val syncedNutrition by viewModel.syncedNutrition.collectAsState()
     val hasHealthPermissions by viewModel.hasHealthPermissions.collectAsState()
     val currentTip by viewModel.currentTip.collectAsState()
     var showWeightDialog by remember { mutableStateOf(false) }
@@ -122,7 +123,7 @@ fun DashboardScreen(
                 }
 
                 item {
-                    MacrosCard(profile)
+                    MacrosCard(profile, syncedNutrition)
                 }
 
                 item {
@@ -335,7 +336,7 @@ fun CoachTipCard(
 }
 
 @Composable
-fun MacrosCard(profile: UserProfile) {
+fun MacrosCard(profile: UserProfile, syncedNutrition: com.example.zz.data.health.DailyNutrition) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -348,15 +349,20 @@ fun MacrosCard(profile: UserProfile) {
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(16.dp))
-            MacroRow("Białko", profile.proteinGrams, Color(0xFFE57373), 0.8f)
-            MacroRow("Tłuszcze", profile.fatGrams, Color(0xFFFFB74D), 0.5f)
-            MacroRow("Węglowodany", profile.carbGrams, Color(0xFF64B5F6), 0.9f)
+            
+            val proteinProgress = if (profile.proteinGrams > 0) (syncedNutrition.protein / profile.proteinGrams).toFloat().coerceIn(0f, 1f) else 0f
+            val fatProgress = if (profile.fatGrams > 0) (syncedNutrition.fat / profile.fatGrams).toFloat().coerceIn(0f, 1f) else 0f
+            val carbsProgress = if (profile.carbGrams > 0) (syncedNutrition.carbs / profile.carbGrams).toFloat().coerceIn(0f, 1f) else 0f
+
+            MacroRow("Białko", profile.proteinGrams, syncedNutrition.protein.toInt(), Color(0xFFE57373), proteinProgress)
+            MacroRow("Tłuszcze", profile.fatGrams, syncedNutrition.fat.toInt(), Color(0xFFFFB74D), fatProgress)
+            MacroRow("Węglowodany", profile.carbGrams, syncedNutrition.carbs.toInt(), Color(0xFF64B5F6), carbsProgress)
         }
     }
 }
 
 @Composable
-fun MacroRow(label: String, grams: Int, color: Color, progress: Float) {
+fun MacroRow(label: String, targetGrams: Int, currentGrams: Int, color: Color, progress: Float) {
     Column(modifier = Modifier.padding(vertical = 8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -365,8 +371,8 @@ fun MacroRow(label: String, grams: Int, color: Color, progress: Float) {
         ) {
             Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
             Row(verticalAlignment = Alignment.Bottom) {
-                Text("${(grams * progress).toInt()}", fontWeight = FontWeight.Bold)
-                Text("/${grams}g", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Text("$currentGrams", fontWeight = FontWeight.Bold)
+                Text("/${targetGrams}g", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
             }
         }
         Spacer(modifier = Modifier.height(6.dp))
